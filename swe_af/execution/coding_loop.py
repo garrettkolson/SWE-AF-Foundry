@@ -297,7 +297,7 @@ async def _run_default_path(
 
     Returns (action, summary, review_result).
     """
-    permission_mode = ""
+    permission_mode = config.permission_mode
 
     try:
         review_result = await _call_with_timeout(
@@ -371,7 +371,7 @@ async def _run_flagged_path(
 
     Returns (action, summary, review_result, qa_result, synthesis_result).
     """
-    permission_mode = ""
+    permission_mode = config.permission_mode
 
     # QA + reviewer in parallel
     try:
@@ -531,7 +531,7 @@ async def run_coding_loop(
     branch_name = issue.get("branch_name", "")
     max_iterations = config.max_coding_iterations
     timeout = config.agent_timeout_seconds
-    permission_mode = ""  # inherits from agent config
+    permission_mode = config.permission_mode
 
     # Multi-repo context (None for single-repo builds)
     target_repo = issue.get("target_repo", "")
