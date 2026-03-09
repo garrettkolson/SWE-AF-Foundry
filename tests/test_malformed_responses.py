@@ -51,10 +51,10 @@ def test_fast_plan_tasks_missing_tasks_field_triggers_fallback() -> None:
     mock_response = MagicMock()
     mock_response.parsed = None
 
-    with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-        instance = MagicMock()
-        instance.run = AsyncMock(return_value=mock_response)
-        MockAgentAI.return_value = instance
+    with patch("swe_af.fast.planner._note"), \
+         patch("swe_af.fast.planner.fast_router") as mock_router:
+        mock_router.harness = AsyncMock(return_value=mock_response)
+        mock_router.note = MagicMock()
 
         result = _run(
             fast_plan_tasks(
@@ -79,12 +79,12 @@ def test_fast_plan_tasks_exception_in_run_triggers_fallback() -> None:
     """When AgentAI.run raises an exception, the planner falls back gracefully."""
     from swe_af.fast.planner import fast_plan_tasks
 
-    with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-        instance = MagicMock()
-        instance.run = AsyncMock(
+    with patch("swe_af.fast.planner._note"), \
+         patch("swe_af.fast.planner.fast_router") as mock_router:
+        mock_router.harness = AsyncMock(
             side_effect=ValueError("Response missing required 'tasks' field")
         )
-        MockAgentAI.return_value = instance
+        mock_router.note = MagicMock()
 
         result = _run(
             fast_plan_tasks(

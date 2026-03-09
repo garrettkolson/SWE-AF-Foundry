@@ -97,6 +97,22 @@ def agentfield_server_guard() -> None:
         )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def attach_fast_router() -> None:
+    """Explicitly 'attach' fast_router to a mock agent to avoid RuntimeError in tests.
+
+    AgentRouter raised RuntimeError on any attribute access if not attached.
+    This session fixture ensures all tests can safely interact with or patch
+    fast_router without triggering that check.
+    """
+    from unittest.mock import MagicMock
+
+    from swe_af.fast import fast_router
+    # Set the private _agent attribute to satisfy AgentRouter's attachment check.
+    # We use object.__setattr__ to avoid any potential __setattr__ guards.
+    object.__setattr__(fast_router, "_agent", MagicMock())
+
+
 # ---------------------------------------------------------------------------
 # mock_agent_ai fixture
 # ---------------------------------------------------------------------------

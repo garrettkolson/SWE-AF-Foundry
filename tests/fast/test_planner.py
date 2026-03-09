@@ -141,10 +141,10 @@ class TestFastPlanTasksFunctional:
         )
         mock_response = _make_mock_response(plan)
 
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(return_value=mock_response)
-            MockAgentAI.return_value = instance
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(return_value=mock_response)
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(
                 goal="Build a REST API",
@@ -164,10 +164,10 @@ class TestFastPlanTasksFunctional:
 
         mock_response = _make_mock_response(None)
 
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(return_value=mock_response)
-            MockAgentAI.return_value = instance
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(return_value=mock_response)
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(
                 goal="Build something",
@@ -184,11 +184,11 @@ class TestFastPlanTasksFunctional:
     def test_llm_exception_triggers_fallback(self) -> None:
         """When AgentAI.run() raises, the fallback plan is returned."""
         from swe_af.fast.planner import fast_plan_tasks
-
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(side_effect=RuntimeError("LLM connection error"))
-            MockAgentAI.return_value = instance
+ 
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(side_effect=RuntimeError("LLM connection error"))
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(
                 goal="Build something",
@@ -205,10 +205,10 @@ class TestFastPlanTasksFunctional:
 
         mock_response = _make_mock_response(None)
 
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(return_value=mock_response)
-            MockAgentAI.return_value = instance
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(return_value=mock_response)
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(goal="Any goal", repo_path="/repo"))
 
@@ -229,10 +229,10 @@ class TestMaxTasksCap:
         plan = FastPlanResult(tasks=many_tasks, rationale="Many tasks.")
         mock_response = _make_mock_response(plan)
 
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(return_value=mock_response)
-            MockAgentAI.return_value = instance
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(return_value=mock_response)
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(
                 goal="Build a thing",
@@ -250,10 +250,10 @@ class TestMaxTasksCap:
         plan = FastPlanResult(tasks=tasks, rationale="Exactly 3 tasks.")
         mock_response = _make_mock_response(plan)
 
-        with patch("swe_af.fast.planner.AgentAI") as MockAgentAI:
-            instance = MagicMock()
-            instance.run = AsyncMock(return_value=mock_response)
-            MockAgentAI.return_value = instance
+        with patch("swe_af.fast.planner._note"), \
+             patch("swe_af.fast.planner.fast_router") as mock_router:
+            mock_router.harness = AsyncMock(return_value=mock_response)
+            mock_router.note = MagicMock()
 
             result = _run(fast_plan_tasks(
                 goal="Build a thing",

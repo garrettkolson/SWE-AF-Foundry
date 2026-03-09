@@ -46,6 +46,12 @@ def _reset_fast_router() -> None:  # type: ignore[return]
         # Re-import swe_af.fast — this recreates fast_router and re-registers
         # all the @fast_router.reasoner() wrappers with original func references.
         importlib.import_module("swe_af.fast")
+        
+        # Explicitly 'attach' the fresh fast_router to a mock agent to avoid RuntimeError.
+        from unittest.mock import MagicMock
+        from swe_af.fast import fast_router
+        object.__setattr__(fast_router, "_agent", MagicMock())
+
         # Re-import sub-modules that register reasoners on the fresh fast_router.
         for mod in (
             "swe_af.fast.executor",

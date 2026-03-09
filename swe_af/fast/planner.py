@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 
-from swe_af.agent_ai import AgentAI, AgentAIConfig
 from swe_af.fast import fast_router
 from swe_af.fast.prompts import FAST_PLANNER_SYSTEM_PROMPT, fast_planner_task_prompt
 from swe_af.fast.schemas import FastPlanResult, FastTask
@@ -20,8 +19,9 @@ logger = logging.getLogger(__name__)
 def _note(msg: str, tags: list[str] | None = None) -> None:
     """Log a message via fast_router.note() when attached, else fall back to logger."""
     try:
+        # AgentRouter may raise RuntimeError on attribute access if not attached.
         fast_router.note(msg, tags=tags or [])
-    except RuntimeError:
+    except (RuntimeError, AttributeError):
         logger.debug("[fast_planner] %s (tags=%s)", msg, tags)
 
 
@@ -96,38 +96,35 @@ async def fast_plan_tasks(
         additional_context=additional_context,
     )
 
-    ai = AgentAI(
-        AgentAIConfig(
-            provider=ai_provider,
+    # Map 'claude' to 'claude-code' for AgentField router compatibility
+    provider = "claude-code" if ai_provider == "claude" else ai_provider
+    try:
+        res = await fast_router.harness(
+            prompt=task_prompt,
+            schema=FastPlanResult,
+            provider=provider,
             model=pm_model,
-            cwd=repo_path,
             max_turns=3,
             permission_mode=permission_mode or None,
-        )
-    )
-
-    try:
-        response = await ai.run(
-            task_prompt,
             system_prompt=FAST_PLANNER_SYSTEM_PROMPT,
-            output_schema=FastPlanResult,
+            cwd=repo_path,
         )
-    except Exception:
-        logger.exception("fast_plan_tasks: AgentAI.run() raised an exception; using fallback")
+        plan = res.parsed
+    except Exception as e:
+        logger.exception("fast_plan_tasks: fast_router.harness() raised an exception; using fallback")
         _note(
-            "fast_plan_tasks: LLM call failed; returning fallback plan",
-            tags=["fast_planner", "fallback"],
+            f"fast_plan_tasks: LLM call failed ({e}); returning fallback plan",
+            tags=["fast_planner", "fallback", "error"],
         )
         return _fallback_plan(goal).model_dump()
 
-    if response.parsed is None:
+    if plan is None:
         _note(
             "fast_plan_tasks: parsed response is None; returning fallback plan",
             tags=["fast_planner", "fallback"],
         )
         return _fallback_plan(goal).model_dump()
 
-    plan: FastPlanResult = response.parsed
     # Truncate to max_tasks using model_copy to avoid class-identity issues
     if len(plan.tasks) > max_tasks:
         plan = plan.model_copy(update={"tasks": plan.tasks[:max_tasks]})
