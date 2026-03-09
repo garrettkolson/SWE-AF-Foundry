@@ -11,6 +11,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-16a34a?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-make%20check-blue?style=for-the-badge)](.github/workflows/ci.yml)
 [![Built with AgentField](https://img.shields.io/badge/Built%20with-AgentField-0A66C2?style=for-the-badge)](https://github.com/Agent-Field/agentfield)
+[![More from Agent-Field](https://img.shields.io/badge/More_from-Agent--Field-111827?style=for-the-badge&logo=github)](https://github.com/Agent-Field)
 ![WorldSpace Community Developer](https://img.shields.io/badge/WorldSpace-Community%20Developer-111827?style=for-the-badge)
 [![Example PR](https://img.shields.io/badge/Example-PR%20%23179-ff6b35?style=for-the-badge&logo=github)](https://github.com/Agent-Field/agentfield/pull/179)
 
@@ -411,6 +412,8 @@ Benchmark assets, logs, evaluator, and generated projects live in [`examples/age
 
 </details>
 
+> **Ship code, then audit it:** [SEC-AF](https://github.com/Agent-Field/sec-af) runs the same multi-agent architecture against your codebase — 250 agents, 94% noise reduction, every finding proven.
+
 ## Docker
 
 ```bash
@@ -674,4 +677,14 @@ make clean-examples
 
 ---
 
-SWE-AF is built on [AgentField](https://github.com/Agent-Field/agentfield) as a first step from single-agent harnesses to autonomous software engineering factories.
+### Also built on AgentField
+
+> **[SEC-AF](https://github.com/Agent-Field/sec-af)** — AI-native security auditor. 250 agents per audit, 94% noise reduction, every finding proven exploitable.
+>
+> **[Contract-AF](https://github.com/Agent-Field/contract-af)** — Legal contract risk analyzer. Agents spawn agents at runtime. Adversarial review catches what solo LLMs miss.
+
+[All repos →](https://github.com/Agent-Field)
+
+---
+
+SWE-AF is built on [AgentField](https://github.com/Agent-Field/agentfield) as a first step from single-agent harnesses to autonomous software engineering factories. [See what else we're building →](https://github.com/Agent-Field)
