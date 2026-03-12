@@ -1,7 +1,7 @@
 """Internal reasoners for the SWE planning pipeline.
 
 Each reasoner wraps a single agent role (PM, Architect, Tech Lead, Sprint Planner)
-and uses AgentAI for actual AI execution. The @router.reasoner() decorator provides
+and uses router.harness() for actual AI execution. The @router.reasoner() decorator provides
 FastAPI endpoints, workflow DAG tracking, and observability via router.note().
 """
 
