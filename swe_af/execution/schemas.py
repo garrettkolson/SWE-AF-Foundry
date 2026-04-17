@@ -453,6 +453,16 @@ class QASynthesisResult(BaseModel):
     iteration_id: str = ""
 
 
+class BuildVerdict(BaseModel):
+    """Output from the build verifier agent."""
+
+    passed: bool
+    skip: bool = False
+    build_errors: list[str] = []
+    projects_built: list[str] = []
+    summary: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Model configuration: runtime + flat role map
 # ---------------------------------------------------------------------------
@@ -476,6 +486,7 @@ ROLE_TO_MODEL_FIELD: dict[str, str] = {
     "git": "git_model",
     "merger": "merger_model",
     "integration_tester": "integration_tester_model",
+    "build_verifier": "build_verifier_model",
 }
 
 MODEL_ROLE_KEYS: list[str] = list(ROLE_TO_MODEL_FIELD)
@@ -915,3 +926,7 @@ class ExecutionConfig(BaseModel):
     @property
     def integration_tester_model(self) -> str:
         return self._model_for("integration_tester_model")
+
+    @property
+    def build_verifier_model(self) -> str:
+        return self._model_for("build_verifier_model")
