@@ -113,6 +113,21 @@ def attach_fast_router() -> None:
     object.__setattr__(fast_router, "_agent", MagicMock())
 
 
+@pytest.fixture(scope="session", autouse=True)
+def attach_swe_router() -> None:
+    """Explicitly 'attach' the swe_af.reasoners.router to a mock agent.
+
+    AgentRouter raises RuntimeError on any attribute access if not attached.
+    This fixture ensures tests that patch router.harness etc. work without
+    triggering the attachment check.
+    """
+    from unittest.mock import MagicMock
+
+    import swe_af.reasoners
+
+    object.__setattr__(swe_af.reasoners.router, "_agent", MagicMock())
+
+
 # ---------------------------------------------------------------------------
 # mock_agent_ai fixture
 # ---------------------------------------------------------------------------
