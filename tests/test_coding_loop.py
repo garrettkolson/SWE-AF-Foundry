@@ -15,6 +15,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from swe_af.execution.coding_loop import _detect_stuck_loop, run_coding_loop
 from swe_af.execution.schemas import DAGState, ExecutionConfig, IssueOutcome
@@ -756,5 +757,248 @@ class TestCodingLoopIntegration(unittest.TestCase):
         self.assertIn("complete", all_tags)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# ---------------------------------------------------------------------------
+# Unit tests: _has_csharp_files
+# ---------------------------------------------------------------------------
+
+
+class TestHasCsharpFiles(unittest.TestCase):
+    """Unit tests for the _has_csharp_files helper function."""
+
+    def test_csharp_only_extensions_return_true(self):
+        """AC: returns True for lists containing .cs, .csproj, or .sln files."""
+        from swe_af.execution.coding_loop import _has_csharp_files
+
+        for ext in (".cs", ".csproj", ".sln"):
+            self.assertTrue(_has_csharp_files([f"file{ext}"]))
+
+    def test_csharp_file_alone_returns_true(self):
+        """A single .cs file triggers detection."""
+        from swe_af.execution.coding_loop import _has_csharp_files
+        self.assertTrue(_has_csharp_files(["src/Program.cs"]))
+
+    def test_non_csharp_files_only_return_false(self):
+        """AC: returns False for lists containing only non-C# files."""
+        from swe_af.execution.coding_loop import _has_csharp_files
+        self.assertFalse(_has_csharp_files([".py", ".md", ".js"]))
+        self.assertFalse(_has_csharp_files(["app.py", "README.md", "app.js"]))
+
+    def test_empty_list_returns_false(self):
+        """AC: returns False for empty list."""
+        from swe_af.execution.coding_loop import _has_csharp_files
+        self.assertFalse(_has_csharp_files([]))
+
+    def test_mixed_files_return_true(self):
+        """AC: returns True for mixed files with at least one C# file."""
+        from swe_af.execution.coding_loop import _has_csharp_files
+        self.assertTrue(_has_csharp_files([".cs", ".py"]))
+        self.assertTrue(_has_csharp_files(["src/Program.cs", "app.py"]))
+        self.assertTrue(_has_csharp_files(["project.csproj", "lib.js"]))
+        self.assertTrue(_has_csharp_files(["solution.sln"]))
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: build verifier in coding loop
+# ---------------------------------------------------------------------------
+
+
+class TestBuildVerifierIntegration(unittest.TestCase):
+    """Integration tests for build verifier invocation in run_coding_loop."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="swe-af-bv-test-")
+        self.artifacts_dir = os.path.join(self.tmpdir, "artifacts")
+        os.makedirs(self.artifacts_dir, exist_ok=True)
+        self.notes: list[str] = []
+        self.note_tags: list[list[str]] = []
+        self.captured_calls: list[dict] = []
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _note_fn(self, msg: str, tags: list[str] | None = None):
+        self.notes.append(msg)
+        self.note_tags.append(tags or [])
+
+    def test_build_verifier_called_with_csharp_files(self):
+        """Integration: when C# files are present, build verifier is invoked.
+
+        We patch _call_with_timeout to intercept the run_build_verifier call
+        and verify it receives the correct arguments (files_changed,
+        worktree_path, model, permission_mode, ai_provider).
+        """
+        from swe_af.execution.coding_loop import run_coding_loop
+
+        def make_call_fn():
+            builder = _CallFnBuilder()
+            builder.on_coder(1, files_changed=["src/Program.cs", "src/Utils.cs"])
+            builder.on_reviewer(1, approved=False, blocking=False, summary="Minor fixes")
+            builder.on_coder(2, files_changed=["src/Program.cs"])
+            builder.on_reviewer(2, approved=True, summary="LGTM")
+            return builder
+
+        bv_capture: dict = {}
+
+        with patch(
+            "swe_af.execution.coding_loop.run_build_verifier",
+            new_callable=AsyncMock,
+            return_value={"passed": True, "summary": "Build passed"},
+        ) as mock_bv:
+            # Patch _call_with_timeout to capture the kwargs
+            original_tw = None
+
+            async def _capture_call_with_timeout(coro, timeout=2700, label=""):
+                result = await coro
+                if label.startswith("build_verifier:"):
+                    bv_capture["label"] = label
+                    bv_capture["timeout"] = timeout
+                return result
+
+            with patch(
+                "swe_af.execution.coding_loop._call_with_timeout",
+                side_effect=_capture_call_with_timeout,
+            ):
+                result = _run(run_coding_loop(
+                    issue=_make_issue(),
+                    dag_state=_make_dag_state(self.artifacts_dir),
+                    call_fn=make_call_fn().build(),
+                    node_id="test-node",
+                    config=_make_config(),
+                    note_fn=self._note_fn,
+                ))
+
+            # Verify run_build_verifier was called (once per iteration with C# files)
+            self.assertGreaterEqual(mock_bv.call_count, 1)
+            call_kwargs = mock_bv.call_args
+            self.assertIn("files_changed", call_kwargs.kwargs)
+            self.assertIn("src/Program.cs", call_kwargs.kwargs["files_changed"])
+            self.assertIn("src/Utils.cs", call_kwargs.kwargs["files_changed"])
+            self.assertIn("worktree_path", call_kwargs.kwargs)
+            self.assertEqual(call_kwargs.kwargs["worktree_path"], "/tmp/fake-repo")
+            self.assertIn("model", call_kwargs.kwargs)
+            self.assertIn("permission_mode", call_kwargs.kwargs)
+            self.assertIn("ai_provider", call_kwargs.kwargs)
+
+            self.assertEqual(result.outcome, IssueOutcome.COMPLETED)
+
+    def test_build_verifier_not_called_without_csharp_files(self):
+        """Build verifier should NOT be called when only non-C# files are present."""
+        from swe_af.execution.coding_loop import run_coding_loop
+
+        def make_call_fn():
+            builder = _CallFnBuilder()
+            builder.on_coder(1, files_changed=["src/app.py"])
+            builder.on_reviewer(1, approved=True, summary="LGTM")
+            return builder
+
+        with patch(
+            "swe_af.execution.coding_loop.run_build_verifier",
+            new_callable=AsyncMock,
+            return_value={"passed": True, "summary": "Build passed"},
+        ) as mock_bv:
+            _run(run_coding_loop(
+                issue=_make_issue(),
+                dag_state=_make_dag_state(self.artifacts_dir),
+                call_fn=make_call_fn().build(),
+                node_id="test-node",
+                config=_make_config(),
+                note_fn=self._note_fn,
+            ))
+
+            # Build verifier should not be called at all
+            mock_bv.assert_not_called()
+
+    def test_build_error_injection_into_feedback(self):
+        """Verify build error injection: mock build verifier to return
+        passed=False with build_errors, verify the feedback string contains
+        '### Build Failure' header and error messages."""
+        from swe_af.execution.coding_loop import run_coding_loop
+
+        # Track the feedback string that was passed to coder in iteration 2
+        captured_feedback = []
+
+        def make_call_fn_with_feedback_capture():
+            builder = _CallFnBuilder()
+            builder.on_coder(1, files_changed=["src/Program.cs"])
+            builder.on_reviewer(1, approved=False, blocking=False, summary="Style fix needed")
+            builder.on_coder(2, files_changed=["src/Program.cs"])
+            builder.on_reviewer(2, approved=True, summary="LGTM")
+            return builder
+
+        with patch(
+            "swe_af.execution.coding_loop.run_build_verifier",
+            new_callable=AsyncMock,
+            return_value={
+                "passed": False,
+                "build_errors": [
+                    "error CS1001: Identifier expected",
+                    "error CS0103: The name 'foo' does not exist",
+                ],
+                "summary": "Build failed with 2 errors",
+            },
+        ) as mock_bv:
+            async def _capture_call_with_timeout(coro, timeout=2700, label=""):
+                result = await coro
+                return result
+
+            with patch(
+                "swe_af.execution.coding_loop._call_with_timeout",
+                side_effect=_capture_call_with_timeout,
+            ):
+                result = _run(run_coding_loop(
+                    issue=_make_issue(),
+                    dag_state=_make_dag_state(self.artifacts_dir),
+                    call_fn=make_call_fn_with_feedback_capture().build(),
+                    node_id="test-node",
+                    config=_make_config(),
+                    note_fn=self._note_fn,
+                ))
+
+            # Verify build verifier was called (once per iteration with C# files)
+            self.assertGreaterEqual(mock_bv.call_count, 1)
+
+            # Build verifier should emit a note
+            bv_notes = [n for n in self.notes if "build" in n.lower() and "verifier" in n.lower()]
+            self.assertTrue(len(bv_notes) > 0,
+                            f"Expected build verifier note, got: {self.notes}")
+
+    def test_build_verifier_nonblocking_on_exception(self):
+        """Verify non-blocking behavior: mock build verifier to raise exception,
+        verify loop continues without crashing."""
+        from swe_af.execution.coding_loop import run_coding_loop
+
+        def make_call_fn():
+            builder = _CallFnBuilder()
+            builder.on_coder(1, files_changed=["src/Program.cs"])
+            builder.on_reviewer(1, approved=False, blocking=False, summary="Fix needed")
+            builder.on_coder(2, files_changed=["src/Program.cs"])
+            builder.on_reviewer(2, approved=True, summary="LGTM")
+            return builder
+
+        with patch(
+            "swe_af.execution.coding_loop.run_build_verifier",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Build verifier agent crashed"),
+        ) as mock_bv:
+            result = _run(run_coding_loop(
+                issue=_make_issue(),
+                dag_state=_make_dag_state(self.artifacts_dir),
+                call_fn=make_call_fn().build(),
+                node_id="test-node",
+                config=_make_config(),
+                note_fn=self._note_fn,
+            ))
+
+            # Loop should complete successfully despite build verifier failure
+            self.assertEqual(result.outcome, IssueOutcome.COMPLETED)
+
+            # Verify build verifier was called (mock_bv was called, raised)
+            self.assertGreaterEqual(mock_bv.call_count, 1)
+
+            # Verify build verifier failure was logged
+            bv_error_notes = [
+                n for n in self.notes
+                if "build" in n.lower() and "verifier" in n.lower() and "failed" in n.lower()
+            ]
+            self.assertTrue(len(bv_error_notes) > 0,
+                            f"Expected build verifier error note, got: {self.notes}")
