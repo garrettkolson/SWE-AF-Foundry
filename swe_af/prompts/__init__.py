@@ -1,6 +1,10 @@
 """Prompt builders for the planning pipeline agent roles."""
 
 from swe_af.prompts.architect import architect_prompts
+from swe_af.prompts.build_verifier import (
+    SYSTEM_PROMPT as build_verifier_system_prompt,
+    build_verifier_task_prompt,
+)
 from swe_af.prompts.code_reviewer import code_reviewer_task_prompt
 from swe_af.prompts.coder import coder_task_prompt
 from swe_af.prompts.git_init import git_init_task_prompt
@@ -35,4 +39,6 @@ __all__ = [
     "qa_task_prompt",
     "code_reviewer_task_prompt",
     "qa_synthesizer_task_prompt",
+    "build_verifier_system_prompt",
+    "build_verifier_task_prompt",
 ]
