@@ -14,6 +14,7 @@ from swe_af.execution.fatal_error import FatalHarnessError, check_fatal_harness_
 from swe_af.execution.schemas import (
     DEFAULT_AGENT_MAX_TURNS,
     AdvisorAction,
+    BuildVerdict,
     CodeReviewResult,
     CoderResult,
     GitHubPRResult,
@@ -30,6 +31,10 @@ from swe_af.execution.schemas import (
     VerificationResult,
     WorkspaceInfo,
 )
+from swe_af.prompts.build_verifier import (
+    SYSTEM_PROMPT as BUILD_VERIFIER_SYSTEM_PROMPT,
+)
+from swe_af.prompts.build_verifier import build_verifier_task_prompt
 from swe_af.prompts.fix_generator import SYSTEM_PROMPT as FIX_GENERATOR_SYSTEM_PROMPT
 from swe_af.prompts.fix_generator import fix_generator_task_prompt
 from swe_af.prompts.issue_advisor import SYSTEM_PROMPT as ISSUE_ADVISOR_SYSTEM_PROMPT
@@ -982,6 +987,71 @@ async def run_coder(
         summary=f"Coder agent failed for {issue_name}",
         complete=False,
         iteration_id=iteration_id,
+    ).model_dump()
+
+
+@router.reasoner()
+async def run_build_verifier(
+    files_changed: list[str],
+    worktree_path: str,
+    model: str = "sonnet",
+    permission_mode: str = "",
+    ai_provider: str = "claude",
+) -> dict:
+    """Verify C# source files compile by running dotnet build.
+
+    When files_changed contains C# files (`.cs`, `.csproj`, `.sln`),
+    identifies affected projects and runs ``dotnet build``. On failure,
+    returns structured build errors. On success or no C# files,
+    returns a pass-through verdict.
+
+    Returns a BuildVerdict dict.
+    """
+    router.note(
+        "Build verifier starting",
+        tags=["build_verifier", "start"],
+    )
+
+    task_prompt = build_verifier_task_prompt(
+        files_changed=files_changed, worktree_path=worktree_path
+    )
+
+    provider = "claude-code" if ai_provider == "claude" else ai_provider
+
+    try:
+        result = await router.harness(
+            task_prompt,
+            system_prompt=BUILD_VERIFIER_SYSTEM_PROMPT,
+            schema=BuildVerdict,
+            model=model,
+            provider=provider,
+            tools=["Bash", "Glob"],
+            cwd=worktree_path,
+            max_turns=DEFAULT_AGENT_MAX_TURNS,
+            permission_mode=permission_mode or None,
+        )
+        check_fatal_harness_error(result)
+        if result.parsed is not None:
+            router.note(
+                f"Build verifier complete: passed={result.parsed.passed}",
+                tags=["build_verifier", "complete"],
+            )
+            return result.parsed.model_dump()
+    except FatalHarnessError:
+        raise  # Non-retryable — propagate immediately
+    except Exception as e:
+        router.note(
+            f"Build verifier agent failed: {e}",
+            tags=["build_verifier", "error"],
+        )
+
+    # Fallback: report verifier failure
+    return BuildVerdict(
+        passed=False,
+        skip=False,
+        build_errors=["Build verifier agent failed to produce a valid result."],
+        projects_built=[],
+        summary="Build verifier agent failed to produce a valid result.",
     ).model_dump()
 
 

@@ -29,6 +29,7 @@ from swe_af.execution.schemas import (
     IssueOutcome,
     IssueResult,
 )
+from swe_af.reasoners.execution_agents import run_build_verifier
 
 
 async def _call_with_timeout(coro, timeout: int = 2700, label: str = ""):
@@ -37,6 +38,17 @@ async def _call_with_timeout(coro, timeout: int = 2700, label: str = ""):
         return await asyncio.wait_for(coro, timeout=timeout)
     except asyncio.TimeoutError:
         raise TimeoutError(f"Agent call '{label}' timed out after {timeout}s")
+
+
+# ---------------------------------------------------------------------------
+# C# file detection helper
+# ---------------------------------------------------------------------------
+
+
+def _has_csharp_files(files: list[str]) -> bool:
+    """Return True if the file list contains C# source/project/solution files."""
+    csharp_extensions = (".cs", ".csproj", ".sln")
+    return any(f.lower().endswith(ext) for f in files for ext in csharp_extensions)
 
 
 # ---------------------------------------------------------------------------
@@ -658,6 +670,35 @@ async def run_coding_loop(
 
         _save_artifact(dag_state.artifacts_dir, iteration_id, "coder", coder_result)
 
+        # --- Build verifier (C# detection, non-blocking) ---
+        build_verifier_result: dict | None = None
+        if _has_csharp_files(files_changed):
+            if note_fn:
+                note_fn(
+                    f"C# files detected ({len(files_changed)} files); "
+                    f"running build verifier for {issue_name}",
+                    tags=["coding_loop", "build_verifier", issue_name],
+                )
+            try:
+                build_verifier_result = await _call_with_timeout(
+                    run_build_verifier(
+                        files_changed=files_changed,
+                        worktree_path=worktree_path,
+                        model=config.coder_model,
+                        permission_mode=permission_mode,
+                        ai_provider=config.ai_provider,
+                    ),
+                    timeout=timeout,
+                    label=f"build_verifier:{issue_name}:iter{iteration}",
+                )
+            except Exception as e:
+                if note_fn:
+                    note_fn(
+                        f"Build verifier failed: {issue_name} iter {iteration}: {e}",
+                        tags=["coding_loop", "build_verifier_error", issue_name],
+                    )
+                build_verifier_result = None
+
         # --- 2. PATH BRANCH ---
         if needs_deeper_qa:
             # FLAGGED PATH: QA + reviewer parallel → synthesizer
@@ -799,6 +840,13 @@ async def run_coding_loop(
                     feedback_parts.append("\n### Blocking Review Issues")
                     for d in blocking_debt:
                         feedback_parts.append(f"- [{d.get('severity')}] {d.get('title', '?')}: {d.get('description', '')}")
+            # Build verifier feedback: inject build errors on failure
+            if build_verifier_result and not build_verifier_result.get("passed", True):
+                build_errors = build_verifier_result.get("build_errors", [])
+                if build_errors:
+                    feedback_parts.append("\n### Build Failure")
+                    for err in build_errors:
+                        feedback_parts.append(f"- {err}")
             feedback = "\n".join(feedback_parts)
         else:
             feedback = summary
