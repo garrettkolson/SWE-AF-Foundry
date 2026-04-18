@@ -36,8 +36,13 @@ Thumbs.db
 _worktrees/
 **/_worktrees/
 
-# Root runtime artifacts for this node (example artifacts are versioned separately)
+# Runtime artifacts
 /.artifacts/
+/.artifacts-v2/
+
+# Example project artifacts
+**/.artifacts/
+**/.artifacts-v2/
 
 # Claude Code
 .claude/
