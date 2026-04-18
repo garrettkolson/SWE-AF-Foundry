@@ -487,6 +487,7 @@ ROLE_TO_MODEL_FIELD: dict[str, str] = {
     "merger": "merger_model",
     "integration_tester": "integration_tester_model",
     "build_verifier": "build_verifier_model",
+    "build_verifier_model": "build_verifier_model",
 }
 
 MODEL_ROLE_KEYS: list[str] = list(ROLE_TO_MODEL_FIELD)
