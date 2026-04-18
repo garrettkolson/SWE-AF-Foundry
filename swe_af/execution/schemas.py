@@ -644,13 +644,13 @@ class BuildConfig(BaseModel):
     repos: list[RepoSpec] = []  # Multi-repo list; normalised by _normalize_repos
     enable_github_pr: bool = True  # Create draft PR after build
     github_pr_base: str = ""  # PR base branch (default: repo's default branch)
-    agent_timeout_seconds: int = 2700
+    agent_timeout_seconds: int = 900
     max_advisor_invocations: int = 2
     enable_issue_advisor: bool = True
     enable_learning: bool = (
         False  # Cross-issue shared memory (conventions, failure patterns, bug patterns)
     )
-    max_concurrent_issues: int = 3  # max parallel issues per level (0 = unlimited)
+    max_concurrent_issues: int = 8  # max parallel issues per level (0 = unlimited)
     level_failure_abort_threshold: float = (
         0.8  # abort DAG when >= this fraction of a level fails
     )
@@ -817,11 +817,11 @@ class ExecutionConfig(BaseModel):
     max_coding_iterations: int = 5
     agent_max_turns: int = DEFAULT_AGENT_MAX_TURNS
     permission_mode: str = ""
-    agent_timeout_seconds: int = 2700  # 45 min
+    agent_timeout_seconds: int = 900  # 15 min
     max_advisor_invocations: int = 2
     enable_issue_advisor: bool = True
     enable_learning: bool = False
-    max_concurrent_issues: int = 3  # max parallel issues per level (0 = unlimited)
+    max_concurrent_issues: int = 8  # max parallel issues per level (0 = unlimited)
     level_failure_abort_threshold: float = (
         0.8  # abort DAG when >= this fraction of a level fails
     )
