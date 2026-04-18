@@ -88,8 +88,15 @@ class TestRoleToModelFieldBuildVerifier(unittest.TestCase):
         """Assert 'build_verifier_model' appears in ROLE_TO_MODEL_FIELD values."""
         self.assertIn("build_verifier_model", ROLE_TO_MODEL_FIELD.values())
 
+    def test_key_exists(self) -> None:
+        """Assert 'build_verifier_model' is a KEY in ROLE_TO_MODEL_FIELD."""
+        self.assertIn("build_verifier_model", ROLE_TO_MODEL_FIELD)
+
     def test_key_value(self) -> None:
         self.assertEqual(ROLE_TO_MODEL_FIELD["build_verifier"], "build_verifier_model")
+
+    def test_key_value_build_verifier_model(self) -> None:
+        self.assertEqual(ROLE_TO_MODEL_FIELD["build_verifier_model"], "build_verifier_model")
 
 
 # ---------------------------------------------------------------------------
